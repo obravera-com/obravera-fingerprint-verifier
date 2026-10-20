@@ -1,0 +1,57 @@
+# Mirrors the house configuration used across the ObraVera repositories, with
+# two deliberate differences, both noted at the hooks concerned.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=5000"]
+      - id: detect-private-key
+
+      # The two hooks below REWRITE the files they inspect, and fixture bytes
+      # are the artefact this repository exists to guarantee. Appending a
+      # newline to a text source changes its Content-Code, which changes its
+      # similarity score, which silently invalidates every `expected_score`
+      # pinned by tools/pin_expected_scores.py. The fixture runner would then
+      # fail for a reason with no visible connection to the cause.
+      #
+      # LICENSE and NOTICE are excluded for a related reason: both are verbatim
+      # copies of external documents. NOTICE is legally operative under Apache-2.0
+      # section 4(d), and a reviewer may diff LICENSE against the canonical text.
+      # Our formatting conventions do not apply to documents we did not write.
+      #
+      # Do not remove these excludes.
+      - id: end-of-file-fixer
+        exclude: ^(fixtures/|LICENSE$|NOTICE$)
+      - id: trailing-whitespace
+        args: ["--markdown-linebreak-ext=md"]
+        exclude: ^(fixtures/|LICENSE$|NOTICE$)
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.8
+    hooks:
+      # The house runs --fix with --unsafe-fixes. Omitted here: unsafe fixes may
+      # change behaviour, and this is a reference implementation whose output
+      # other parties verify against. A fix worth making is worth reviewing.
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: ["-c", ".yamllint"]
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint

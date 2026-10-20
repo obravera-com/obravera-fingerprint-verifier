@@ -1,0 +1,25 @@
+# GitHub Actions only, deliberately.
+#
+# The pip ecosystem is NOT watched. iscc-core is pinned exactly, and that pin is
+# load-bearing: the clean-checkout reproducibility rule requires fingerprints to be
+# byte-reproducible from a clean checkout, which a floating dependency would
+# defeat. Watching it would produce a steady stream of pull requests arguing
+# against a decision already made deliberately, each needing the fixtures
+# re-pinned and re-verified to accept. Upgrading iscc-core is a considered act,
+# not a routine one.
+#
+# Actions are the opposite case. They are pinned by commit SHA, which is what
+# makes them trustworthy and also what makes them go stale silently; Dependabot
+# is the mechanism that keeps those pins current.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
+    labels: ["dependencies", "github-actions", "automated"]

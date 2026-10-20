@@ -1,0 +1,107 @@
+name: Pre-commit Auto-Update
+
+on:
+  schedule:
+    - cron: "0 17 * * 1"  # Mondays 17:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  autoupdate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: pre-commit autoupdate
+        run: |
+          pipx install pre-commit
+          pre-commit autoupdate
+      - name: Open PR if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Stable branch name: re-runs update the same branch and the same
+          # open PR instead of leaving a new orphan branch behind each week.
+          BRANCH: chore/pre-commit-autoupdate
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          set -uo pipefail
+          if git diff --quiet .pre-commit-config.yaml; then
+            echo "no updates"
+            exit 0
+          fi
+          # Capture the rev moves for the PR body before committing.
+          changes=$(git diff -U0 -- .pre-commit-config.yaml \
+            | grep -E '^[+-][[:space:]]+rev:' || true)
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add .pre-commit-config.yaml
+          git commit -m "chore: pre-commit autoupdate"
+          git push --force -u origin "$BRANCH"
+
+          existing=$(gh pr list --head "$BRANCH" --state open \
+            --json number --jq '.[0].number // empty' || true)
+          if [ -n "$existing" ]; then
+            echo "Updated existing PR #$existing"
+            exit 0
+          fi
+
+          # Explicit --title/--body rather than --fill: --fill derives them by
+          # running `git diff origin/$BASE...HEAD`, which fails under
+          # actions/checkout's shallow single-branch fetch whenever the base
+          # branch was never fetched into the runner's clone.
+          fence="\`\`\`"
+          body=$(printf '%s\n\n%s\n%s\n%s\n' \
+            "Automated pre-commit autoupdate." \
+            "${fence}diff" "$changes" "$fence")
+          if gh pr create --base "$BASE" --head "$BRANCH" \
+              --title "chore: pre-commit autoupdate" \
+              --body "$body" \
+              --label dependencies --label automated --label pre-commit; then
+            exit 0
+          fi
+
+          # `gh pr create` fails with "GitHub Actions is not permitted to
+          # create or approve pull requests" unless that repo setting is on,
+          # and leaving it off is deliberate: a pull request opened by
+          # GITHUB_TOKEN does not trigger `pull_request` workflows, so it would
+          # arrive carrying none of the conformance checks this repository
+          # exists to run. Asking a human for the click is what keeps CI on the
+          # bump. The branch is pushed either way, so raise the request as an
+          # issue -- GITHUB_TOKEN may open those -- and finish green, because a
+          # permanent, expected condition reported as a failed run teaches the
+          # maintainer to ignore failed runs.
+          compare="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$BRANCH?expand=1"
+          summary=$(printf '%s\n\n%s\n%s\n%s\n\n%s\n\n%s\n' \
+            "Pushed \`$BRANCH\`. Opening the pull request is a manual step." \
+            "${fence}diff" "$changes" "$fence" \
+            "Open it here: $compare" \
+            "Close this issue once the pull request is open.")
+
+          # One standing issue, refreshed weekly, for the same reason the
+          # branch name is stable: no orphans to sweep up. Matching on the
+          # labels rather than the title keeps this off the search index.
+          issue=$(gh issue list --state open \
+            --label automated --label pre-commit \
+            --json number --jq '.[0].number // empty' || true)
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$summary"
+            echo "Refreshed issue #$issue"
+          else
+            gh issue create --title "Pre-commit autoupdate: open the PR" \
+              --body "$summary" \
+              --label dependencies --label automated --label pre-commit
+          fi
+
+          {
+            echo "### Pre-commit autoupdate needs a pull request opened by hand"
+            echo
+            echo "$summary"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::Autoupdate pushed $BRANCH; open the PR from the tracking issue."

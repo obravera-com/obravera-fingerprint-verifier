@@ -1,0 +1,33 @@
+name: QA doc check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  qa-policy:
+    name: Verify QA policy document
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: The QA policy document exists
+        run: test -f docs/qa/QUALITY-ASSURANCE.md
+
+      # The house workflow greps for bare strings, so `grep -q "CI"` passes on any
+      # document containing those two letters anywhere. These are anchored to
+      # headings instead, which costs nothing and actually asserts the sections
+      # are present. Matching is case-insensitive because this repository uses
+      # sentence case for headings while the house uses title case.
+      - name: The required sections are present
+        run: |
+          set -euo pipefail
+          DOC="docs/qa/QUALITY-ASSURANCE.md"
+          for section in "purpose" "ci gates" "release automation" "change log"; do
+            grep -qiE "^## .*${section}" "$DOC" \
+              || { echo "::error::missing section heading: ${section}"; exit 1; }
+          done

@@ -1,0 +1,12 @@
+__pycache__/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+.venv/
+.DS_Store
+
+# Local working files, not part of the repository
+.private/
+Claude outputs/
+CLAUDE.md
