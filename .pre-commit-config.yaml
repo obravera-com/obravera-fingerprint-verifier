@@ -31,7 +31,7 @@ repos:
         exclude: ^(fixtures/|LICENSE$|NOTICE$)
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.8
+    rev: v0.17.2
     hooks:
       # The house runs --fix with --unsafe-fixes. Omitted here: unsafe fixes may
       # change behaviour, and this is a reference implementation whose output
